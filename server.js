@@ -4,10 +4,12 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const fetch = require('node-fetch');
+const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+app.use(express.static('public'));
 
 // 🏷 **Precios de las cuentas**
 const precios = {
@@ -21,7 +23,7 @@ const precios = {
     "Canva": 87, "FILMITY": 97, "FILMITY ESTRENOS CINE": 154
 };
 
-// 🏷 **Alias de cuentas (para que coincidan con la base de datos)**
+// 🏷 **Alias de cuentas**
 const aliasCuentas = {
     "Netflix": "Netflix Básico",
     "Disney": "Disney Básico",
@@ -34,19 +36,22 @@ const aliasCuentas = {
     "Filmity": "FILMITY"
 };
 
-// 📌 **Ruta para crear sesión de pago en Stripe**
+// 📌 **Página de pago en Render**
+app.get('/pago', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'pago.html'));
+});
+
+// 📌 **Redirección a Stripe**
 app.get('/checkout', async (req, res) => {
     let { nip, cuenta } = req.query;
-
-    // Si la cuenta tiene un alias, se cambia al nombre correcto
     cuenta = aliasCuentas[cuenta] || cuenta;
 
-    if (!nip || !cuenta) return res.status(400).json({ error: "Faltan parámetros (nip o cuenta)" });
-    if (!precios[cuenta]) return res.status(400).json({ error: "Cuenta no válida" });
+    if (!nip || !cuenta) return res.send("⚠️ Error: Faltan parámetros (nip o cuenta)");
+    if (!precios[cuenta]) return res.send("⚠️ Error: Cuenta no válida");
 
     try {
         const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
+            payment_method_types: ['card', 'oxxo', 'google_pay', 'apple_pay'],
             line_items: [{
                 price_data: {
                     currency: 'mxn',
@@ -60,13 +65,13 @@ app.get('/checkout', async (req, res) => {
             cancel_url: process.env.CANCEL_URL
         });
 
-        res.json({ checkoutUrl: session.url });
+        res.redirect(session.url);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.send(`⚠️ Error: ${err.message}`);
     }
 });
 
-// 📌 **Webhook de Stripe para procesar pagos exitosos**
+// 📌 **Webhook de Stripe para actualizar InfinityFree**
 app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
     let event;
     try {
@@ -97,6 +102,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
     res.sendStatus(200);
 });
 
-// 📌 **Iniciar servidor en puerto dinámico para Render**
+// 📌 **Iniciar servidor**
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor corriendo en puerto ${PORT}`));
