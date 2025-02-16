@@ -46,7 +46,7 @@ app.get('/checkout', async (req, res) => {
 
     try {
         const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card', 'oxxo', 'link'], // Métodos habilitados en Stripe
+            payment_method_types: ['card', 'oxxo', 'link'], // Métodos de pago habilitados
             line_items: [{
                 price_data: {
                     currency: 'mxn',
@@ -56,9 +56,10 @@ app.get('/checkout', async (req, res) => {
                 quantity: 1
             }],
             mode: 'payment',
-            success_url: `${process.env.SUCCESS_URL}?nip=${nip}`,
+            success_url: `${process.env.SUCCESS_URL}?nip=${nip}`,  // Redirigir correctamente
             cancel_url: process.env.CANCEL_URL
         });
+        
 
         res.redirect(session.url); // Redirigir directamente a Stripe para el pago
     } catch (err) {
