@@ -4,12 +4,10 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const fetch = require('node-fetch');
-const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('public'));
 
 // 🏷 **Precios de las cuentas**
 const precios = {
@@ -23,7 +21,7 @@ const precios = {
     "Canva": 87, "FILMITY": 97, "FILMITY ESTRENOS CINE": 154
 };
 
-// 🏷 **Alias de cuentas**
+// 🏷 **Alias de cuentas (para que coincidan con la base de datos)**
 const aliasCuentas = {
     "Netflix": "Netflix Básico",
     "Disney": "Disney Básico",
@@ -36,15 +34,11 @@ const aliasCuentas = {
     "Filmity": "FILMITY"
 };
 
-// 📌 **Página de pago en Render**
-app.get('/pago', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'pago.html'));
-});
-
-// 📌 **Redirección a Stripe**
+// 📌 **Ruta para crear sesión de pago en Stripe**
 app.get('/checkout', async (req, res) => {
     let { nip, cuenta } = req.query;
-
+    
+    // Si la cuenta tiene un alias, se cambia al nombre correcto
     cuenta = aliasCuentas[cuenta] || cuenta;
 
     if (!nip || !cuenta) return res.status(400).json({ error: "Faltan parámetros (nip o cuenta)" });
@@ -52,7 +46,7 @@ app.get('/checkout', async (req, res) => {
 
     try {
         const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card', 'oxxo', 'paypal'],
+            payment_method_types: ['card', 'oxxo', 'link'], // Métodos habilitados en Stripe
             line_items: [{
                 price_data: {
                     currency: 'mxn',
@@ -66,13 +60,13 @@ app.get('/checkout', async (req, res) => {
             cancel_url: process.env.CANCEL_URL
         });
 
-        res.json({ checkoutUrl: session.url });
+        res.redirect(session.url); // Redirigir directamente a Stripe para el pago
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// 📌 **Webhook de Stripe para actualizar InfinityFree**
+// 📌 **Webhook de Stripe para procesar pagos exitosos**
 app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
     let event;
     try {
@@ -103,6 +97,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
     res.sendStatus(200);
 });
 
-// 📌 **Iniciar servidor**
+// 📌 **Iniciar servidor en puerto dinámico para Render**
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor corriendo en puerto ${PORT}`));
