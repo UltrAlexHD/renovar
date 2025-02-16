@@ -44,14 +44,15 @@ app.get('/pago', (req, res) => {
 // 📌 **Redirección a Stripe**
 app.get('/checkout', async (req, res) => {
     let { nip, cuenta } = req.query;
+
     cuenta = aliasCuentas[cuenta] || cuenta;
 
-    if (!nip || !cuenta) return res.send("⚠️ Error: Faltan parámetros (nip o cuenta)");
-    if (!precios[cuenta]) return res.send("⚠️ Error: Cuenta no válida");
+    if (!nip || !cuenta) return res.status(400).json({ error: "Faltan parámetros (nip o cuenta)" });
+    if (!precios[cuenta]) return res.status(400).json({ error: "Cuenta no válida" });
 
     try {
         const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card', 'oxxo', 'google_pay', 'apple_pay'],
+            payment_method_types: ['card', 'oxxo', 'paypal'],
             line_items: [{
                 price_data: {
                     currency: 'mxn',
@@ -65,9 +66,9 @@ app.get('/checkout', async (req, res) => {
             cancel_url: process.env.CANCEL_URL
         });
 
-        res.redirect(session.url);
+        res.json({ checkoutUrl: session.url });
     } catch (err) {
-        res.send(`⚠️ Error: ${err.message}`);
+        res.status(500).json({ error: err.message });
     }
 });
 
